@@ -151,3 +151,44 @@ export interface CopyBatchResult {
   applied: boolean;
   copies: CopyResult[];
 }
+
+export interface BulkExportResult {
+  root: string;
+  totalFiles: number;
+  results: ExportResult[];
+}
+
+export interface BulkImportItem {
+  typeId: string;
+  typeTitle: string;
+  file: string;
+  name: string;
+  payload: Record<string, unknown>;
+  created?: unknown;
+  error?: string | null;
+}
+
+export interface BulkImportResult {
+  root: string;
+  dryRun: boolean;
+  order: string[];
+  items: BulkImportItem[];
+}
+
+export interface BulkCompareItem {
+  typeId: string;
+  typeTitle: string;
+  file: string;
+  name: string;
+  matched: boolean;
+  identical: boolean;
+  added: number;
+  removed: number;
+  changed: number;
+  error?: string | null;
+}
+
+export interface BulkCompareResult {
+  root: string;
+  items: BulkCompareItem[];
+}

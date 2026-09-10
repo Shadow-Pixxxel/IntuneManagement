@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { ObjectList } from "@/components/ObjectList";
 import { ObjectDetail } from "@/components/ObjectDetail";
+import { BulkView } from "@/components/BulkView";
 import { Logo } from "@/components/Logo";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/components/ui/toast";
@@ -20,6 +21,7 @@ export default function App() {
   const [selectedType, setSelectedType] = useState<ObjectType | null>(null);
   const [selectedItem, setSelectedItem] = useState<ListItem | null>(null);
   const [search, setSearch] = useState("");
+  const [bulk, setBulk] = useState(false);
 
   useEffect(() => {
     api
@@ -58,6 +60,13 @@ export default function App() {
     setSelectedType(t);
     setSelectedItem(null);
     setSearch("");
+    setBulk(false);
+  }, []);
+
+  const onSelectBulk = useCallback(() => {
+    setBulk(true);
+    setSelectedType(null);
+    setSelectedItem(null);
   }, []);
 
   if (booting) {
@@ -77,7 +86,13 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar catalog={catalog} selectedTypeId={selectedType?.id ?? null} onSelect={onSelectType} />
+      <Sidebar
+        catalog={catalog}
+        selectedTypeId={selectedType?.id ?? null}
+        onSelect={onSelectType}
+        bulkActive={bulk}
+        onSelectBulk={onSelectBulk}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           status={status}
@@ -89,7 +104,9 @@ export default function App() {
           onSignOut={onSignOut}
         />
         <main className="min-h-0 flex-1">
-          {selectedType ? (
+          {bulk ? (
+            <BulkView catalog={catalog} />
+          ) : selectedType ? (
             <ObjectList type={selectedType} search={search} onOpen={setSelectedItem} />
           ) : (
             <WelcomeScreen count={catalog.length} />

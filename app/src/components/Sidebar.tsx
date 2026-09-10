@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Layers, Search } from "lucide-react";
 import type { ObjectType } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { groupIcon } from "@/lib/icons";
@@ -10,6 +10,8 @@ interface Props {
   catalog: ObjectType[];
   selectedTypeId: string | null;
   onSelect: (type: ObjectType) => void;
+  bulkActive: boolean;
+  onSelectBulk: () => void;
 }
 
 interface Group {
@@ -18,7 +20,7 @@ interface Group {
   items: ObjectType[];
 }
 
-export function Sidebar({ catalog, selectedTypeId, onSelect }: Props) {
+export function Sidebar({ catalog, selectedTypeId, onSelect, bulkActive, onSelectBulk }: Props) {
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -54,6 +56,19 @@ export function Sidebar({ catalog, selectedTypeId, onSelect }: Props) {
             className="pl-8"
           />
         </div>
+      </div>
+
+      <div className="px-2 pb-1">
+        <button
+          onClick={onSelectBulk}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
+            bulkActive ? "bg-primary/15 text-primary" : "text-foreground/80 hover:bg-accent hover:text-accent-foreground"
+          )}
+        >
+          <Layers className="h-4 w-4" />
+          Bulk operations
+        </button>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-6 pt-1">

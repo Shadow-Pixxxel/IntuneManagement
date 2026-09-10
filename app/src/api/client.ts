@@ -1,5 +1,8 @@
 import type {
   AuthStatus,
+  BulkCompareResult,
+  BulkExportResult,
+  BulkImportResult,
   CompareResult,
   CopyBatchResult,
   CopyResult,
@@ -171,5 +174,23 @@ export const api = {
     return isTauri()
       ? invokeTauri("copy_by_pattern", { typeId, pattern, nameTemplate, apply })
       : httpPost("/copy/pattern", { typeId, pattern, nameTemplate, apply });
+  },
+
+  async bulkExport(typeIds: string[], outDir: string): Promise<BulkExportResult> {
+    return isTauri()
+      ? invokeTauri("bulk_export", { typeIds, outDir })
+      : httpPost("/bulk/export", { typeIds, outDir });
+  },
+
+  async bulkImport(rootDir: string, dryRun: boolean): Promise<BulkImportResult> {
+    return isTauri()
+      ? invokeTauri("bulk_import", { rootDir, dryRun })
+      : httpPost("/bulk/import", { rootDir, dryRun });
+  },
+
+  async bulkCompare(rootDir: string): Promise<BulkCompareResult> {
+    return isTauri()
+      ? invokeTauri("bulk_compare", { rootDir })
+      : httpPost("/bulk/compare", { rootDir });
   },
 };
