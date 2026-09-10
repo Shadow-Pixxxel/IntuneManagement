@@ -31,6 +31,7 @@ export interface ObjectType {
   expand?: string | null;
   assignments: boolean;
   odataTypeFilter?: string | null;
+  odataTypeExclude?: string | null;
   icon: string;
 }
 

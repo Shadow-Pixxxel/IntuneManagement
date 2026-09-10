@@ -386,7 +386,7 @@
     "queryList": null,
     "expand": null,
     "assignments": true,
-    "odataTypeFilter": null,
+    "odataTypeFilter": "deviceEnrollmentPlatformRestrictionsConfiguration,deviceEnrollmentPlatformRestrictionConfiguration,deviceEnrollmentLimitConfiguration",
     "icon": "EnrollmentRestrictions"
   },
   {
@@ -400,6 +400,19 @@
     "expand": null,
     "assignments": true,
     "odataTypeFilter": "windows10EnrollmentCompletionPageConfiguration",
+    "icon": "WinEnrollment"
+  },
+  {
+    "id": "WindowsHelloForBusiness",
+    "title": "Windows Hello for Business",
+    "api": "/deviceManagement/deviceEnrollmentConfigurations",
+    "group": "Windows Enrollment",
+    "groupOrder": 5,
+    "nameProperty": "displayName",
+    "queryList": null,
+    "expand": null,
+    "assignments": true,
+    "odataTypeFilter": "deviceEnrollmentWindowsHelloForBusinessConfiguration",
     "icon": "WinEnrollment"
   },
   {

@@ -222,6 +222,113 @@ pub fn settings_catalog_section(settings: &[Value]) -> DocSection {
     DocSection { title: "Configuration settings".to_string(), rows }
 }
 
+// ---- Endpoint Security intent settings ------------------------------------
+
+/// Humanise an intent `definitionId` such as
+/// `deviceConfiguration--windows10EndpointProtectionConfiguration_defenderMonitorFileActivity`
+/// into a readable label using the trailing setting segment.
+fn intent_setting_name(definition_id: &str) -> String {
+    let tail = definition_id.rsplit("--").next().unwrap_or(definition_id);
+    let setting = tail.split_once('_').map(|(_, s)| s).unwrap_or(tail);
+    format_key(setting)
+}
+
+fn intent_value_string(inst: &Value) -> String {
+    // Prefer a structured `value`, then fall back to the raw `valueJson`.
+    match inst.get("value") {
+        Some(Value::Array(arr)) => {
+            return arr
+                .iter()
+                .map(|x| scalar_to_string(x.get("value").unwrap_or(x)))
+                .collect::<Vec<_>>()
+                .join(", ");
+        }
+        Some(v) if !v.is_null() && !v.is_object() => return scalar_to_string(v),
+        _ => {}
+    }
+    if let Some(vj) = inst.get("valueJson").and_then(|v| v.as_str()) {
+        if vj != "null" && !vj.is_empty() {
+            if let Ok(parsed) = serde_json::from_str::<Value>(vj) {
+                if parsed.is_string() || parsed.is_number() || parsed.is_boolean() {
+                    return scalar_to_string(&parsed);
+                }
+            }
+            return vj.to_string();
+        }
+    }
+    "—".to_string()
+}
+
+/// Build the settings section for an Endpoint Security intent from its
+/// `settings` collection (fetched from `/intents/{id}/settings`).
+pub fn endpoint_security_section(settings: &[Value]) -> DocSection {
+    let mut rows = Vec::new();
+    for s in settings {
+        let def_id = s.get("definitionId").and_then(|v| v.as_str()).unwrap_or("");
+        if def_id.is_empty() {
+            continue;
+        }
+        rows.push(DocRow {
+            name: intent_setting_name(def_id),
+            value: intent_value_string(s),
+            level: 0,
+            kind: RowKind::Setting,
+        });
+    }
+    rows.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    DocSection { title: "Configuration settings".to_string(), rows }
+}
+
+// ---- Administrative Templates (ADMX) --------------------------------------
+
+/// Build the settings section for an Administrative Template from its
+/// `definitionValues` (each with an expanded `definition` and
+/// `presentationValues`).
+pub fn admx_section(definition_values: &[Value]) -> DocSection {
+    let mut rows = Vec::new();
+    for dv in definition_values {
+        let def = dv.get("definition");
+        let name = def
+            .and_then(|d| d.get("displayName"))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| "(unknown setting)".to_string());
+        let category = def
+            .and_then(|d| d.get("categoryPath"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim_start_matches('\\')
+            .to_string();
+        let enabled = dv.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+        let display = if category.is_empty() { name.clone() } else { format!("{category} \\ {name}") };
+        rows.push(DocRow {
+            name: display,
+            value: if enabled { "Enabled".into() } else { "Disabled".into() },
+            level: 0,
+            kind: RowKind::Setting,
+        });
+        if let Some(pvs) = dv.get("presentationValues").and_then(|v| v.as_array()) {
+            for pv in pvs {
+                let label = pv
+                    .get("presentation")
+                    .and_then(|p| p.get("label"))
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .unwrap_or_else(|| "Value".to_string());
+                let value = pv.get("value").cloned().unwrap_or(Value::Null);
+                let value = if value.is_array() {
+                    value.as_array().unwrap().iter().map(scalar_to_string).collect::<Vec<_>>().join(", ")
+                } else {
+                    scalar_to_string(&value)
+                };
+                rows.push(DocRow { name: format_key(&label), value, level: 1, kind: RowKind::Setting });
+            }
+        }
+    }
+    DocSection { title: "Configuration settings".to_string(), rows }
+}
+
 // ---- Generic property renderer --------------------------------------------
 
 fn flatten(value: &Value, name: &str, level: u8, out: &mut Vec<DocRow>) {
@@ -411,4 +518,83 @@ pub fn is_settings_catalog(type_id: &str) -> bool {
 /// The settings endpoint path for a settings-catalog object.
 pub fn settings_endpoint(t: &ObjectType, id: &str) -> String {
     format!("{}('{}')/settings?$expand=settingDefinitions", t.api, id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn settings_catalog_resolves_choice_labels() {
+        let settings = json!([{
+            "settingDefinitions": [
+                {
+                    "id": "device_vendor_msft_policy_allowarchivescanning",
+                    "displayName": "Allow Archive Scanning",
+                    "options": [
+                        {"itemId": "device_vendor_msft_policy_allowarchivescanning_1", "displayName": "Allowed. Scans the archive files."}
+                    ]
+                }
+            ],
+            "settingInstance": {
+                "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+                "settingDefinitionId": "device_vendor_msft_policy_allowarchivescanning",
+                "choiceSettingValue": {"value": "device_vendor_msft_policy_allowarchivescanning_1", "children": []}
+            }
+        }]);
+        let section = settings_catalog_section(settings.as_array().unwrap());
+        assert_eq!(section.rows.len(), 1);
+        assert_eq!(section.rows[0].name, "Allow Archive Scanning");
+        assert_eq!(section.rows[0].value, "Allowed. Scans the archive files.");
+    }
+
+    #[test]
+    fn endpoint_security_intent_settings_render() {
+        let settings = json!([
+            {
+                "@odata.type": "#microsoft.graph.deviceManagementBooleanSettingInstance",
+                "definitionId": "deviceConfiguration--windows10EndpointProtectionConfiguration_defenderMonitorFileActivity",
+                "value": true
+            },
+            {
+                "@odata.type": "#microsoft.graph.deviceManagementIntegerSettingInstance",
+                "definitionId": "deviceConfiguration--windows10EndpointProtectionConfiguration_defenderScanMaxCpu",
+                "valueJson": "50"
+            }
+        ]);
+        let section = endpoint_security_section(settings.as_array().unwrap());
+        assert_eq!(section.rows.len(), 2);
+        // sorted by name; "Defender Monitor File Activity" < "Defender Scan Max Cpu"
+        assert_eq!(section.rows[0].name, "Defender Monitor File Activity");
+        assert_eq!(section.rows[0].value, "Enabled");
+        assert_eq!(section.rows[1].name, "Defender Scan Max Cpu");
+        assert_eq!(section.rows[1].value, "50");
+    }
+
+    #[test]
+    fn admx_definition_values_render() {
+        let values = json!([
+            {
+                "enabled": true,
+                "definition": {"displayName": "Allow Telemetry", "categoryPath": "\\Windows Components\\Data Collection"},
+                "presentationValues": [
+                    {"value": "3", "presentation": {"label": "Level"}}
+                ]
+            },
+            {
+                "enabled": false,
+                "definition": {"displayName": "Turn off Autoplay", "categoryPath": "\\Windows Components\\AutoPlay Policies"},
+                "presentationValues": []
+            }
+        ]);
+        let section = admx_section(values.as_array().unwrap());
+        assert_eq!(section.rows.len(), 3);
+        assert_eq!(section.rows[0].name, "Windows Components\\Data Collection \\ Allow Telemetry");
+        assert_eq!(section.rows[0].value, "Enabled");
+        assert_eq!(section.rows[1].level, 1);
+        assert_eq!(section.rows[1].name, "Level");
+        assert_eq!(section.rows[1].value, "3");
+        assert_eq!(section.rows[2].value, "Disabled");
+    }
 }

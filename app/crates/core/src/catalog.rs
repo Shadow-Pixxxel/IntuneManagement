@@ -20,8 +20,13 @@ pub struct ObjectType {
     pub expand: Option<String>,
     /// Whether the type supports group assignments.
     pub assignments: bool,
-    /// For endpoints that multiplex several types, filter list results by `@odata.type` substring.
+    /// For endpoints that multiplex several types, keep only list results whose
+    /// `@odata.type` contains one of these (comma-separated) substrings.
     pub odata_type_filter: Option<String>,
+    /// For multiplexed endpoints, drop list results whose `@odata.type` contains
+    /// one of these (comma-separated) substrings. Applied after `odata_type_filter`.
+    #[serde(default)]
+    pub odata_type_exclude: Option<String>,
     pub icon: String,
 }
 

@@ -294,9 +294,16 @@ impl Backend {
         let search_lc = search.map(|s| s.to_lowercase());
         let mut items = Vec::new();
         for obj in raw {
+            let ot = obj.get("@odata.type").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
             if let Some(filter) = &t.odata_type_filter {
-                let ot = obj.get("@odata.type").and_then(|v| v.as_str()).unwrap_or("");
-                if !ot.to_lowercase().contains(&filter.to_lowercase()) {
+                let any = filter.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).any(|s| ot.contains(&s));
+                if !any {
+                    continue;
+                }
+            }
+            if let Some(exclude) = &t.odata_type_exclude {
+                let excluded = exclude.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).any(|s| ot.contains(&s));
+                if excluded {
                     continue;
                 }
             }
@@ -323,7 +330,8 @@ impl Backend {
         let token = self.token().await?;
         let query = t.expand.as_ref().map(|e| format!("$expand={e}"));
         let url = graph::url(&format!("{}/{}", t.api, id), query.as_deref());
-        let object = graph::get(&self.http, &token, &url).await?;
+        let mut object = graph::get(&self.http, &token, &url).await?;
+        self.apply_special_processing(&t, id, &token, &mut object).await;
         let name = display_name(&object, &t.name_property);
         let assignments = if t.assignments {
             let aurl = graph::url(&format!("{}/{}/assignments", t.api, id), None);
@@ -332,6 +340,33 @@ impl Backend {
             None
         };
         Ok(ObjectDetail { id: id.to_string(), name, object, assignments })
+    }
+
+    /// Object-type-specific enrichment that a plain GET does not return:
+    /// Endpoint Security intent `settings` and Administrative Template
+    /// `definitionValues` (ADMX) are separate Graph collections and are merged
+    /// into the object so export and documentation see the full configuration.
+    async fn apply_special_processing(&self, t: &ObjectType, id: &str, token: &str, object: &mut Value) {
+        match t.id.as_str() {
+            "EndpointSecurity" => {
+                let url = graph::url(&format!("/deviceManagement/intents/{id}/settings"), None);
+                if let Ok(settings) = graph::get_all(&self.http, token, &url).await {
+                    if let Some(map) = object.as_object_mut() {
+                        map.insert("settings".into(), Value::Array(settings));
+                    }
+                }
+            }
+            "AdministrativeTemplates" => {
+                let q = "$expand=definition($select=id,displayName,categoryPath,classType,policyType),presentationValues($expand=presentation)";
+                let url = graph::url(&format!("/deviceManagement/groupPolicyConfigurations/{id}/definitionValues"), Some(q));
+                if let Ok(values) = graph::get_all(&self.http, token, &url).await {
+                    if let Some(map) = object.as_object_mut() {
+                        map.insert("definitionValues".into(), Value::Array(values));
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     // ---- Export -----------------------------------------------------------
@@ -404,6 +439,23 @@ impl Backend {
             let url = graph::url(&documentation::settings_endpoint(&t, id), None);
             let settings = graph::get_all(&self.http, &token, &url).await.unwrap_or_default();
             let section = documentation::settings_catalog_section(&settings);
+            if section.rows.is_empty() {
+                sections.push(documentation::generic_section(&detail.object));
+            } else {
+                sections.push(section);
+            }
+        } else if type_id == "EndpointSecurity" {
+            // `settings` was merged in by special processing during get_object.
+            let settings = detail.object.get("settings").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let section = documentation::endpoint_security_section(&settings);
+            if section.rows.is_empty() {
+                sections.push(documentation::generic_section(&detail.object));
+            } else {
+                sections.push(section);
+            }
+        } else if type_id == "AdministrativeTemplates" {
+            let values = detail.object.get("definitionValues").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let section = documentation::admx_section(&values);
             if section.rows.is_empty() {
                 sections.push(documentation::generic_section(&detail.object));
             } else {
