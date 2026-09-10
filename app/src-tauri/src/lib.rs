@@ -7,7 +7,8 @@ use intune_core::{
     compare::CompareResult,
     documentation::DocumentedObject,
     error::CoreError,
-    Backend, DocExportResult, DocFormat, ExportResult, ImportResult, ListResult, ObjectDetail,
+    Backend, CopyBatchResult, CopyResult, DocExportResult, DocFormat, ExportResult, ImportResult,
+    ListResult, ObjectDetail,
 };
 use std::sync::Arc;
 use tauri::State;
@@ -76,6 +77,28 @@ async fn compare_to_file(backend: B<'_>, type_id: String, id: String, file_path:
 }
 
 #[tauri::command]
+async fn copy_object(
+    backend: B<'_>,
+    type_id: String,
+    id: String,
+    new_name: Option<String>,
+    apply: bool,
+) -> Result<CopyResult, CoreError> {
+    backend.copy_object(&type_id, &id, new_name, apply).await
+}
+
+#[tauri::command]
+async fn copy_by_pattern(
+    backend: B<'_>,
+    type_id: String,
+    pattern: String,
+    name_template: Option<String>,
+    apply: bool,
+) -> Result<CopyBatchResult, CoreError> {
+    backend.copy_by_pattern(&type_id, &pattern, name_template, apply).await
+}
+
+#[tauri::command]
 async fn document_object(backend: B<'_>, type_id: String, id: String) -> Result<DocumentedObject, CoreError> {
     backend.document_object(&type_id, &id).await
 }
@@ -109,6 +132,8 @@ pub fn run() {
             export,
             import_file,
             compare_to_file,
+            copy_object,
+            copy_by_pattern,
             document_object,
             export_documentation,
         ])

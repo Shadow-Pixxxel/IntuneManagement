@@ -40,6 +40,8 @@ async fn main() {
         .route("/api/document/export", post(export_documentation))
         .route("/api/export", post(export))
         .route("/api/import", post(import_file))
+        .route("/api/copy", post(copy_object))
+        .route("/api/copy/pattern", post(copy_by_pattern))
         .route("/api/compare", post(compare))
         .layer(CorsLayer::permissive())
         .with_state(backend);
@@ -195,6 +197,40 @@ fn default_true() -> bool {
 
 async fn import_file(State(b): State<Shared>, Json(body): Json<ImportBody>) -> impl IntoResponse {
     match b.import_file(&body.type_id, &body.file_path, body.dry_run).await {
+        Ok(r) => Json(r).into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CopyBody {
+    type_id: String,
+    id: String,
+    new_name: Option<String>,
+    #[serde(default)]
+    apply: bool,
+}
+
+async fn copy_object(State(b): State<Shared>, Json(body): Json<CopyBody>) -> impl IntoResponse {
+    match b.copy_object(&body.type_id, &body.id, body.new_name, body.apply).await {
+        Ok(r) => Json(r).into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CopyPatternBody {
+    type_id: String,
+    pattern: String,
+    name_template: Option<String>,
+    #[serde(default)]
+    apply: bool,
+}
+
+async fn copy_by_pattern(State(b): State<Shared>, Json(body): Json<CopyPatternBody>) -> impl IntoResponse {
+    match b.copy_by_pattern(&body.type_id, &body.pattern, body.name_template, body.apply).await {
         Ok(r) => Json(r).into_response(),
         Err(e) => err(e).into_response(),
     }

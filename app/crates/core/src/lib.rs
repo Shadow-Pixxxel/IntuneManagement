@@ -124,6 +124,33 @@ pub struct DocExportResult {
     pub files: Vec<DocExportedFile>,
 }
 
+/// Result of copying (cloning) a single object.
+///
+/// By default this is a dry run: `payload` holds exactly what *would* be
+/// created (id, version and assignments stripped, name replaced) and `created`
+/// is null. A real create only happens when `applied` is true.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyResult {
+    pub type_id: String,
+    pub source_id: String,
+    pub source_name: String,
+    pub new_name: String,
+    pub payload: Value,
+    pub created: Option<Value>,
+    pub applied: bool,
+    pub target_api: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyBatchResult {
+    pub type_id: String,
+    pub pattern: String,
+    pub applied: bool,
+    pub copies: Vec<CopyResult>,
+}
+
 impl Default for Backend {
     fn default() -> Self {
         Self::new()
@@ -291,20 +318,7 @@ impl Backend {
         let created = if dry_run {
             None
         } else {
-            let token = self.token().await?;
-            let resp = self
-                .http
-                .post(&target_api)
-                .bearer_auth(&token)
-                .json(&payload)
-                .send()
-                .await?;
-            let status = resp.status();
-            let body = resp.text().await?;
-            if !status.is_success() {
-                return Err(CoreError::Graph { status: status.as_u16(), message: body });
-            }
-            Some(serde_json::from_str(&body).unwrap_or(Value::Null))
+            self.create_object(&target_api, &payload).await?
         };
         Ok(ImportResult { type_id: t.id.clone(), dry_run, payload, created, target_api })
     }
@@ -392,6 +406,79 @@ impl Backend {
         Ok(DocExportResult { directory: dir.to_string_lossy().to_string(), files })
     }
 
+    // ---- Copy / Clone -----------------------------------------------------
+
+    /// Copy (clone) a single object under a new name. Assignments are **not**
+    /// copied. Defaults to a dry run; a real create only happens when `apply`
+    /// is true *and* writes are explicitly enabled via `INTUNE_ALLOW_WRITES=1`.
+    pub async fn copy_object(&self, type_id: &str, id: &str, new_name: Option<String>, apply: bool) -> CoreResult<CopyResult> {
+        let t = catalog::find(type_id).ok_or_else(|| CoreError::UnknownType(type_id.into()))?;
+        let detail = self.get_object(type_id, id).await?;
+        let source_name = detail.name.clone();
+        let new_name = new_name.unwrap_or_else(|| format!("{source_name} - Copy"));
+
+        // Strip server-generated / read-only fields and assignments, then rename.
+        let mut payload = clean_for_import(detail.object.clone());
+        set_name(&mut payload, &t.name_property, &new_name);
+
+        let target_api = graph::url(&t.api, None);
+        let created = if apply {
+            self.create_object(&target_api, &payload).await?
+        } else {
+            None
+        };
+
+        Ok(CopyResult {
+            type_id: t.id.clone(),
+            source_id: id.to_string(),
+            source_name,
+            new_name,
+            payload,
+            created: created.clone(),
+            applied: apply && created.is_some(),
+            target_api,
+        })
+    }
+
+    /// Copy every object of a type whose name contains `pattern`
+    /// (case-insensitive). Each copy is named by `name_template`, where the
+    /// token `{name}` is replaced with the source name (default `{name} - Copy`).
+    pub async fn copy_by_pattern(
+        &self,
+        type_id: &str,
+        pattern: &str,
+        name_template: Option<String>,
+        apply: bool,
+    ) -> CoreResult<CopyBatchResult> {
+        let t = catalog::find(type_id).ok_or_else(|| CoreError::UnknownType(type_id.into()))?;
+        let template = name_template.unwrap_or_else(|| "{name} - Copy".to_string());
+        let matches = self.list_objects(type_id, Some(pattern)).await?;
+        let mut copies = Vec::new();
+        for item in matches.items {
+            let new_name = template.replace("{name}", &item.name);
+            let copy = self.copy_object(type_id, &item.id, Some(new_name), apply).await?;
+            copies.push(copy);
+        }
+        Ok(CopyBatchResult { type_id: t.id.clone(), pattern: pattern.to_string(), applied: apply, copies })
+    }
+
+    /// POST a create to Graph, double-gated behind `INTUNE_ALLOW_WRITES=1`.
+    async fn create_object(&self, target_api: &str, payload: &Value) -> CoreResult<Option<Value>> {
+        if std::env::var("INTUNE_ALLOW_WRITES").ok().as_deref() != Some("1") {
+            return Err(CoreError::Other(
+                "Writes are disabled. Set INTUNE_ALLOW_WRITES=1 to allow creating objects.".into(),
+            ));
+        }
+        let token = self.token().await?;
+        let resp = self.http.post(target_api).bearer_auth(&token).json(payload).send().await?;
+        let status = resp.status();
+        let body = resp.text().await?;
+        if !status.is_success() {
+            return Err(CoreError::Graph { status: status.as_u16(), message: body });
+        }
+        Ok(Some(serde_json::from_str(&body).unwrap_or(Value::Null)))
+    }
+
     // ---- Compare ----------------------------------------------------------
 
     pub async fn compare_to_file(&self, type_id: &str, id: &str, file_path: &str) -> CoreResult<compare::CompareResult> {
@@ -415,6 +502,23 @@ fn display_name(obj: &Value, name_property: &str) -> String {
 
 fn short_type(t: &str) -> String {
     t.trim_start_matches("#microsoft.graph.").to_string()
+}
+
+/// Set the display name of a payload on the type's name property, with common
+/// fallbacks so the rename lands regardless of the object's schema.
+fn set_name(payload: &mut Value, name_property: &str, new_name: &str) {
+    if let Some(map) = payload.as_object_mut() {
+        let mut set_any = false;
+        for key in [name_property, "displayName", "name"] {
+            if map.contains_key(key) {
+                map.insert(key.to_string(), Value::String(new_name.to_string()));
+                set_any = true;
+            }
+        }
+        if !set_any {
+            map.insert(name_property.to_string(), Value::String(new_name.to_string()));
+        }
+    }
 }
 
 fn sanitize(name: &str) -> String {
