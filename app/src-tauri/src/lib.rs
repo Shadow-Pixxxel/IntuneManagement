@@ -11,16 +11,16 @@ use intune_core::{
 use std::sync::Arc;
 use tauri::State;
 
-type B = State<'_, Arc<Backend>>;
+type B<'a> = State<'a, Arc<Backend>>;
 
 #[tauri::command]
-async fn auth_status(backend: B) -> AuthStatus {
-    backend.status().await
+async fn auth_status(backend: B<'_>) -> Result<AuthStatus, CoreError> {
+    Ok(backend.status().await)
 }
 
 #[tauri::command]
 async fn login_app_only(
-    backend: B,
+    backend: B<'_>,
     tenant_id: Option<String>,
     app_id: Option<String>,
     app_secret: Option<String>,
@@ -29,47 +29,48 @@ async fn login_app_only(
 }
 
 #[tauri::command]
-async fn device_start(backend: B, tenant_id: Option<String>, app_id: Option<String>) -> Result<DeviceCodeStart, CoreError> {
+async fn device_start(backend: B<'_>, tenant_id: Option<String>, app_id: Option<String>) -> Result<DeviceCodeStart, CoreError> {
     backend.device_start(tenant_id, app_id).await
 }
 
 #[tauri::command]
-async fn device_poll(backend: B, tenant_id: String, app_id: String, device_code: String) -> Result<AuthStatus, CoreError> {
+async fn device_poll(backend: B<'_>, tenant_id: String, app_id: String, device_code: String) -> Result<AuthStatus, CoreError> {
     backend.device_poll(&tenant_id, &app_id, &device_code).await
 }
 
 #[tauri::command]
-async fn logout(backend: B) {
-    backend.logout().await
+async fn logout(backend: B<'_>) -> Result<(), CoreError> {
+    backend.logout().await;
+    Ok(())
 }
 
 #[tauri::command]
-fn catalog(backend: B) -> Vec<ObjectType> {
+fn catalog(backend: B<'_>) -> Vec<ObjectType> {
     backend.catalog()
 }
 
 #[tauri::command]
-async fn list_objects(backend: B, type_id: String, search: Option<String>) -> Result<ListResult, CoreError> {
+async fn list_objects(backend: B<'_>, type_id: String, search: Option<String>) -> Result<ListResult, CoreError> {
     backend.list_objects(&type_id, search.as_deref()).await
 }
 
 #[tauri::command]
-async fn get_object(backend: B, type_id: String, id: String) -> Result<ObjectDetail, CoreError> {
+async fn get_object(backend: B<'_>, type_id: String, id: String) -> Result<ObjectDetail, CoreError> {
     backend.get_object(&type_id, &id).await
 }
 
 #[tauri::command]
-async fn export(backend: B, type_id: String, ids: Option<Vec<String>>, out_dir: String) -> Result<ExportResult, CoreError> {
+async fn export(backend: B<'_>, type_id: String, ids: Option<Vec<String>>, out_dir: String) -> Result<ExportResult, CoreError> {
     backend.export(&type_id, ids, &out_dir).await
 }
 
 #[tauri::command]
-async fn import_file(backend: B, type_id: String, file_path: String, dry_run: bool) -> Result<ImportResult, CoreError> {
+async fn import_file(backend: B<'_>, type_id: String, file_path: String, dry_run: bool) -> Result<ImportResult, CoreError> {
     backend.import_file(&type_id, &file_path, dry_run).await
 }
 
 #[tauri::command]
-async fn compare_to_file(backend: B, type_id: String, id: String, file_path: String) -> Result<CompareResult, CoreError> {
+async fn compare_to_file(backend: B<'_>, type_id: String, id: String, file_path: String) -> Result<CompareResult, CoreError> {
     backend.compare_to_file(&type_id, &id, &file_path).await
 }
 
