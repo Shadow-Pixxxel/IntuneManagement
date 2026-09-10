@@ -131,10 +131,19 @@ async fn export_documentation(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let backend = Arc::new(Backend::new());
+    let restore = backend.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(Arc::new(Backend::new()))
+        .manage(backend)
+        .setup(move |_app| {
+            // Best-effort restore of a delegated session from the OS keyring.
+            tauri::async_runtime::spawn(async move {
+                let _ = restore.try_restore().await;
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             auth_status,
             login_app_only,

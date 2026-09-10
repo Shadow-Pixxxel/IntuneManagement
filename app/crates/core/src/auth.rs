@@ -98,6 +98,11 @@ impl Session {
         }
     }
 
+    /// The current delegated refresh token, if this is a device-code session.
+    pub fn refresh_token(&self) -> Option<&str> {
+        self.refresh_token.as_deref()
+    }
+
     pub fn status(&self) -> AuthStatus {
         AuthStatus {
             authenticated: true,
@@ -219,6 +224,18 @@ pub async fn device_code_start(
         tenant_id,
         app_id,
     })
+}
+
+/// Rehydrate a delegated session from a stored refresh token by exchanging it
+/// for a fresh access token. Used to restore a session from the OS keyring.
+pub async fn restore_from_refresh(
+    http: &reqwest::Client,
+    tenant_id: &str,
+    app_id: &str,
+    refresh_token: &str,
+) -> CoreResult<Session> {
+    let t = request_refresh(http, tenant_id, app_id, refresh_token).await?;
+    Ok(Session::from_token(AuthMode::DeviceCode, tenant_id.to_string(), app_id.to_string(), None, t))
 }
 
 /// Poll once for a device-code token. Returns `AuthorizationPending` until the user approves.

@@ -26,6 +26,9 @@ async fn main() {
     tracing_subscriber::fmt().with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into())).init();
 
     let backend = Arc::new(Backend::new());
+    if backend.try_restore().await {
+        tracing::info!("restored delegated session from OS keyring");
+    }
     let app = Router::new()
         .route("/api/health", get(|| async { Json(json!({"ok": true})) }))
         .route("/api/status", get(status))

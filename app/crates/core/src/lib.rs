@@ -12,6 +12,7 @@ pub mod compare;
 pub mod documentation;
 pub mod error;
 pub mod graph;
+pub mod token_store;
 
 use auth::{AuthStatus, DeviceCodeStart, Session};
 use catalog::ObjectType;
@@ -263,12 +264,52 @@ impl Backend {
     pub async fn device_poll(&self, tenant_id: &str, app_id: &str, device_code: &str) -> CoreResult<AuthStatus> {
         let mut session = auth::device_code_poll(&self.http, tenant_id, app_id, device_code).await?;
         self.enrich_org(&mut session).await;
+        self.persist_session(&session);
         let status = session.status();
         *self.session.lock().await = Some(session);
         Ok(status)
     }
 
+    /// Try to restore a delegated session from the OS keyring at startup.
+    /// Best-effort: silently does nothing if no token is stored or the keyring
+    /// is unavailable. Returns whether a session was restored.
+    pub async fn try_restore(&self) -> bool {
+        if self.session.lock().await.is_some() {
+            return true;
+        }
+        let Some(persisted) = token_store::load() else { return false };
+        match auth::restore_from_refresh(&self.http, &persisted.tenant_id, &persisted.app_id, &persisted.refresh_token).await {
+            Ok(mut session) => {
+                self.enrich_org(&mut session).await;
+                self.persist_session(&session);
+                *self.session.lock().await = Some(session);
+                true
+            }
+            Err(e) => {
+                tracing::debug!("session restore failed: {e:?}");
+                token_store::clear();
+                false
+            }
+        }
+    }
+
+    /// Persist a device-code session's refresh token to the OS keyring, if one
+    /// is available. App-only sessions are not persisted (the secret lives in
+    /// the environment / caller).
+    fn persist_session(&self, session: &Session) {
+        if session.mode == auth::AuthMode::DeviceCode {
+            if let Some(refresh) = session.refresh_token() {
+                token_store::save(&token_store::PersistedAuth {
+                    tenant_id: session.tenant_id.clone(),
+                    app_id: session.app_id.clone(),
+                    refresh_token: refresh.to_string(),
+                });
+            }
+        }
+    }
+
     pub async fn logout(&self) {
+        token_store::clear();
         *self.session.lock().await = None;
     }
 

@@ -12,3 +12,4 @@ reqwest = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
 tracing = { workspace = true }
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
