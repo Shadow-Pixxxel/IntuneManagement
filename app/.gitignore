@@ -1,0 +1,17 @@
+# Rust
+/target
+**/target
+
+# Node
+node_modules
+dist
+dist-ssr
+*.local
+
+# Build/test output
+/exports
+exports/
+
+# Editor
+.DS_Store
+*.log
