@@ -36,3 +36,30 @@ pub fn catalog() -> Vec<ObjectType> {
 pub fn find(id: &str) -> Option<ObjectType> {
     catalog().into_iter().find(|t| t.id == id)
 }
+
+/// Find an object type by its human title (used to map export subfolders back to types).
+pub fn find_by_title(title: &str) -> Option<ObjectType> {
+    catalog().into_iter().find(|t| t.title.eq_ignore_ascii_case(title))
+}
+
+/// Dependency import priority: lower values are imported first. Objects that are
+/// referenced by others (scope tags, filters, scripts, apps) come before the
+/// policies that use them; aggregates like Policy Sets come last.
+pub fn import_priority(type_id: &str) -> u32 {
+    match type_id {
+        "ScopeTags" => 0,
+        "RoleDefinitions" => 5,
+        "AssignmentFilters" => 10,
+        "DeviceCategories" => 15,
+        "Locations" | "NamedLocations" => 20,
+        "Notifications" | "TermsOfUse" | "TermsAndConditions" => 25,
+        "ReusableSettings" => 30,
+        "ComplianceScripts" | "DeviceHealthScripts" | "PowerShellScripts" | "MacScripts" | "MacCustomAttributes" => 35,
+        "AuthenticationContext" | "AuthenticationStrengths" => 40,
+        "Applications" => 50,
+        "AppConfigurationManagedApp" | "AppConfigurationManagedDevice" | "AppProtection" => 110,
+        "PolicySets" => 900,
+        "ConditionalAccess" => 950,
+        _ => 100,
+    }
+}

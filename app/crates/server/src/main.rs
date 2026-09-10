@@ -42,6 +42,9 @@ async fn main() {
         .route("/api/import", post(import_file))
         .route("/api/copy", post(copy_object))
         .route("/api/copy/pattern", post(copy_by_pattern))
+        .route("/api/bulk/export", post(bulk_export))
+        .route("/api/bulk/import", post(bulk_import))
+        .route("/api/bulk/compare", post(bulk_compare))
         .route("/api/compare", post(compare))
         .layer(CorsLayer::permissive())
         .with_state(backend);
@@ -246,6 +249,48 @@ struct CompareBody {
 
 async fn compare(State(b): State<Shared>, Json(body): Json<CompareBody>) -> impl IntoResponse {
     match b.compare_to_file(&body.type_id, &body.id, &body.file_path).await {
+        Ok(r) => Json(r).into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BulkExportBody {
+    type_ids: Vec<String>,
+    out_dir: String,
+}
+
+async fn bulk_export(State(b): State<Shared>, Json(body): Json<BulkExportBody>) -> impl IntoResponse {
+    match b.bulk_export(body.type_ids, &body.out_dir).await {
+        Ok(r) => Json(r).into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BulkImportBody {
+    root_dir: String,
+    #[serde(default = "default_true")]
+    dry_run: bool,
+}
+
+async fn bulk_import(State(b): State<Shared>, Json(body): Json<BulkImportBody>) -> impl IntoResponse {
+    match b.bulk_import(&body.root_dir, body.dry_run).await {
+        Ok(r) => Json(r).into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BulkCompareBody {
+    root_dir: String,
+}
+
+async fn bulk_compare(State(b): State<Shared>, Json(body): Json<BulkCompareBody>) -> impl IntoResponse {
+    match b.bulk_compare(&body.root_dir).await {
         Ok(r) => Json(r).into_response(),
         Err(e) => err(e).into_response(),
     }

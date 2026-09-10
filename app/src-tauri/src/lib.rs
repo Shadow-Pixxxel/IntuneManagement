@@ -7,8 +7,8 @@ use intune_core::{
     compare::CompareResult,
     documentation::DocumentedObject,
     error::CoreError,
-    Backend, CopyBatchResult, CopyResult, DocExportResult, DocFormat, ExportResult, ImportResult,
-    ListResult, ObjectDetail,
+    Backend, BulkCompareResult, BulkExportResult, BulkImportResult, CopyBatchResult, CopyResult,
+    DocExportResult, DocFormat, ExportResult, ImportResult, ListResult, ObjectDetail,
 };
 use std::sync::Arc;
 use tauri::State;
@@ -99,6 +99,21 @@ async fn copy_by_pattern(
 }
 
 #[tauri::command]
+async fn bulk_export(backend: B<'_>, type_ids: Vec<String>, out_dir: String) -> Result<BulkExportResult, CoreError> {
+    backend.bulk_export(type_ids, &out_dir).await
+}
+
+#[tauri::command]
+async fn bulk_import(backend: B<'_>, root_dir: String, dry_run: bool) -> Result<BulkImportResult, CoreError> {
+    backend.bulk_import(&root_dir, dry_run).await
+}
+
+#[tauri::command]
+async fn bulk_compare(backend: B<'_>, root_dir: String) -> Result<BulkCompareResult, CoreError> {
+    backend.bulk_compare(&root_dir).await
+}
+
+#[tauri::command]
 async fn document_object(backend: B<'_>, type_id: String, id: String) -> Result<DocumentedObject, CoreError> {
     backend.document_object(&type_id, &id).await
 }
@@ -134,6 +149,9 @@ pub fn run() {
             compare_to_file,
             copy_object,
             copy_by_pattern,
+            bulk_export,
+            bulk_import,
+            bulk_compare,
             document_object,
             export_documentation,
         ])

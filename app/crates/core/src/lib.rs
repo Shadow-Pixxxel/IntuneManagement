@@ -14,8 +14,9 @@ pub mod error;
 pub mod graph;
 
 use auth::{AuthStatus, DeviceCodeStart, Session};
+use catalog::ObjectType;
 use documentation::DocumentedObject;
-use error::{CoreError, CoreResult};
+use error::{CoreError, CoreResult, ErrorBody};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -149,6 +150,61 @@ pub struct CopyBatchResult {
     pub pattern: String,
     pub applied: bool,
     pub copies: Vec<CopyResult>,
+}
+
+/// Result of exporting several object types at once into one folder tree.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkExportResult {
+    pub root: String,
+    pub total_files: usize,
+    pub results: Vec<ExportResult>,
+}
+
+/// One planned/applied create in a bulk import.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkImportItem {
+    pub type_id: String,
+    pub type_title: String,
+    pub file: String,
+    pub name: String,
+    pub payload: Value,
+    pub created: Option<Value>,
+    pub error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkImportResult {
+    pub root: String,
+    pub dry_run: bool,
+    /// Type ids in the order they are imported (dependency order).
+    pub order: Vec<String>,
+    pub items: Vec<BulkImportItem>,
+}
+
+/// One file compared against the live tenant in a bulk compare.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkCompareItem {
+    pub type_id: String,
+    pub type_title: String,
+    pub file: String,
+    pub name: String,
+    pub matched: bool,
+    pub identical: bool,
+    pub added: usize,
+    pub removed: usize,
+    pub changed: usize,
+    pub error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkCompareResult {
+    pub root: String,
+    pub items: Vec<BulkCompareItem>,
 }
 
 impl Default for Backend {
@@ -479,6 +535,175 @@ impl Backend {
         Ok(Some(serde_json::from_str(&body).unwrap_or(Value::Null)))
     }
 
+    // ---- Bulk operations --------------------------------------------------
+
+    /// Export several object types at once into `out_dir`, one subfolder per
+    /// type (read-only against the tenant).
+    pub async fn bulk_export(&self, type_ids: Vec<String>, out_dir: &str) -> CoreResult<BulkExportResult> {
+        let mut results = Vec::new();
+        let mut total_files = 0;
+        for type_id in &type_ids {
+            let res = self.export(type_id, None, out_dir).await?;
+            total_files += res.files.len();
+            results.push(res);
+        }
+        Ok(BulkExportResult { root: out_dir.to_string(), total_files, results })
+    }
+
+    /// Import an exported folder tree (`root/<Type Title>/<name>.json`),
+    /// processing types in dependency order. Defaults to a dry run; real
+    /// creates are double-gated behind `INTUNE_ALLOW_WRITES=1`.
+    pub async fn bulk_import(&self, root_dir: &str, dry_run: bool) -> CoreResult<BulkImportResult> {
+        let mut typed_files = scan_export_tree(root_dir)?;
+        // Dependency order, then by type title for determinism.
+        typed_files.sort_by(|a, b| {
+            catalog::import_priority(&a.0.id)
+                .cmp(&catalog::import_priority(&b.0.id))
+                .then_with(|| a.0.title.cmp(&b.0.title))
+        });
+        let order: Vec<String> = {
+            let mut seen = Vec::new();
+            for (t, _) in &typed_files {
+                if !seen.contains(&t.id) {
+                    seen.push(t.id.clone());
+                }
+            }
+            seen
+        };
+
+        let mut items = Vec::new();
+        for (t, path) in typed_files {
+            let file = path.to_string_lossy().to_string();
+            let text = match std::fs::read_to_string(&path) {
+                Ok(x) => x,
+                Err(e) => {
+                    items.push(BulkImportItem {
+                        type_id: t.id.clone(),
+                        type_title: t.title.clone(),
+                        file,
+                        name: String::new(),
+                        payload: Value::Null,
+                        created: None,
+                        error: Some(e.to_string()),
+                    });
+                    continue;
+                }
+            };
+            let parsed: Value = match serde_json::from_str(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    items.push(BulkImportItem {
+                        type_id: t.id.clone(),
+                        type_title: t.title.clone(),
+                        file,
+                        name: String::new(),
+                        payload: Value::Null,
+                        created: None,
+                        error: Some(format!("parse: {e}")),
+                    });
+                    continue;
+                }
+            };
+            let name = display_name(&parsed, &t.name_property);
+            let payload = clean_for_import(parsed);
+            let target_api = graph::url(&t.api, None);
+            let (created, error) = if dry_run {
+                (None, None)
+            } else {
+                match self.create_object(&target_api, &payload).await {
+                    Ok(c) => (c, None),
+                    Err(e) => (None, Some(ErrorBody::from(&e).message)),
+                }
+            };
+            items.push(BulkImportItem {
+                type_id: t.id.clone(),
+                type_title: t.title.clone(),
+                file,
+                name,
+                payload,
+                created,
+                error,
+            });
+        }
+        Ok(BulkImportResult { root: root_dir.to_string(), dry_run, order, items })
+    }
+
+    /// Compare an exported folder tree against the live tenant, matching each
+    /// file to a live object by name (read-only).
+    pub async fn bulk_compare(&self, root_dir: &str) -> CoreResult<BulkCompareResult> {
+        let typed_files = scan_export_tree(root_dir)?;
+        let mut items = Vec::new();
+        // Cache live listings per type to avoid repeated Graph calls.
+        let mut cache: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
+        for (t, path) in typed_files {
+            let file = path.to_string_lossy().to_string();
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let file_obj: Value = match serde_json::from_str(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    items.push(BulkCompareItem {
+                        type_id: t.id.clone(),
+                        type_title: t.title.clone(),
+                        file,
+                        name: String::new(),
+                        matched: false,
+                        identical: false,
+                        added: 0,
+                        removed: 0,
+                        changed: 0,
+                        error: Some(format!("parse: {e}")),
+                    });
+                    continue;
+                }
+            };
+            let name = display_name(&file_obj, &t.name_property);
+
+            if !cache.contains_key(&t.id) {
+                let listed = self
+                    .list_objects(&t.id, None)
+                    .await
+                    .map(|r| r.items.into_iter().map(|i| (i.name, i.id)).collect())
+                    .unwrap_or_default();
+                cache.insert(t.id.clone(), listed);
+            }
+            let live_id = cache
+                .get(&t.id)
+                .and_then(|list| list.iter().find(|(n, _)| n.eq_ignore_ascii_case(&name)).map(|(_, id)| id.clone()));
+
+            match live_id {
+                None => items.push(BulkCompareItem {
+                    type_id: t.id.clone(),
+                    type_title: t.title.clone(),
+                    file,
+                    name,
+                    matched: false,
+                    identical: false,
+                    added: 0,
+                    removed: 0,
+                    changed: 0,
+                    error: None,
+                }),
+                Some(id) => {
+                    let detail = self.get_object(&t.id, &id).await?;
+                    let cmp = compare::compare(&detail.object, &file_obj);
+                    items.push(BulkCompareItem {
+                        type_id: t.id.clone(),
+                        type_title: t.title.clone(),
+                        file,
+                        name,
+                        matched: true,
+                        identical: cmp.identical,
+                        added: cmp.added,
+                        removed: cmp.removed,
+                        changed: cmp.changed,
+                        error: None,
+                    });
+                }
+            }
+        }
+        Ok(BulkCompareResult { root: root_dir.to_string(), items })
+    }
+
     // ---- Compare ----------------------------------------------------------
 
     pub async fn compare_to_file(&self, type_id: &str, id: &str, file_path: &str) -> CoreResult<compare::CompareResult> {
@@ -502,6 +727,34 @@ fn display_name(obj: &Value, name_property: &str) -> String {
 
 fn short_type(t: &str) -> String {
     t.trim_start_matches("#microsoft.graph.").to_string()
+}
+
+/// Walk an exported folder tree `root/<Type Title>/*.json` and map each JSON
+/// file to its object type (by subfolder title). Files in unknown subfolders
+/// are skipped.
+fn scan_export_tree(root_dir: &str) -> CoreResult<Vec<(ObjectType, std::path::PathBuf)>> {
+    let root = std::path::Path::new(root_dir);
+    if !root.is_dir() {
+        return Err(CoreError::Other(format!("not a directory: {root_dir}")));
+    }
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        let sub = entry.path();
+        if !sub.is_dir() {
+            continue;
+        }
+        let title = sub.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let Some(t) = catalog::find_by_title(title) else { continue };
+        for file in std::fs::read_dir(&sub)? {
+            let file = file?;
+            let path = file.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                out.push((t.clone(), path));
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Set the display name of a payload on the type's name property, with common
