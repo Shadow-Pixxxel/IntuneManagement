@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 224 71% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 71% 4%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 71% 4%;
+  --primary: 245 75% 59%;
+  --primary-foreground: 210 20% 98%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 220 39% 11%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 244 76% 96%;
+  --accent-foreground: 245 58% 38%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 20% 98%;
+  --success: 142 71% 45%;
+  --success-foreground: 210 20% 98%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 245 75% 59%;
+  --radius: 0.7rem;
+}
+
+.dark {
+  --background: 224 47% 6%;
+  --foreground: 210 20% 96%;
+  --card: 224 41% 9%;
+  --card-foreground: 210 20% 96%;
+  --popover: 224 45% 8%;
+  --popover-foreground: 210 20% 96%;
+  --primary: 245 80% 68%;
+  --primary-foreground: 224 71% 4%;
+  --secondary: 223 34% 16%;
+  --secondary-foreground: 210 20% 96%;
+  --muted: 223 32% 14%;
+  --muted-foreground: 217 14% 63%;
+  --accent: 245 40% 22%;
+  --accent-foreground: 245 90% 88%;
+  --destructive: 0 63% 51%;
+  --destructive-foreground: 210 20% 98%;
+  --success: 142 61% 48%;
+  --success-foreground: 210 20% 98%;
+  --border: 223 30% 18%;
+  --input: 223 30% 20%;
+  --ring: 245 80% 68%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Slim, elegant scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.06), transparent);
+  animation: shimmer 1.4s infinite;
+}
