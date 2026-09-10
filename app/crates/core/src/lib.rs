@@ -9,12 +9,14 @@
 pub mod auth;
 pub mod catalog;
 pub mod compare;
+pub mod documentation;
 pub mod error;
 pub mod graph;
 
 use auth::{AuthStatus, DeviceCodeStart, Session};
+use documentation::DocumentedObject;
 use error::{CoreError, CoreResult};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
@@ -77,6 +79,49 @@ pub struct ImportResult {
     /// The created object when `dry_run` is false, otherwise null.
     pub created: Option<Value>,
     pub target_api: String,
+}
+
+/// Output format for exported documentation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DocFormat {
+    Markdown,
+    Html,
+    Json,
+}
+
+impl DocFormat {
+    fn extension(&self) -> &'static str {
+        match self {
+            DocFormat::Markdown => "md",
+            DocFormat::Html => "html",
+            DocFormat::Json => "json",
+        }
+    }
+
+    fn render(&self, doc: &DocumentedObject) -> String {
+        match self {
+            DocFormat::Markdown => doc.to_markdown(),
+            DocFormat::Html => doc.to_html(),
+            DocFormat::Json => serde_json::to_string_pretty(&doc.to_json()).unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocExportedFile {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub format: DocFormat,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocExportResult {
+    pub directory: String,
+    pub files: Vec<DocExportedFile>,
 }
 
 impl Default for Backend {
@@ -262,6 +307,89 @@ impl Backend {
             Some(serde_json::from_str(&body).unwrap_or(Value::Null))
         };
         Ok(ImportResult { type_id: t.id.clone(), dry_run, payload, created, target_api })
+    }
+
+    // ---- Documentation ----------------------------------------------------
+
+    /// Build a human-readable documentation model for a single object.
+    ///
+    /// Settings Catalog and Compliance V2 objects are resolved against the
+    /// Graph `settingDefinitions` so the output reads like the Intune portal;
+    /// all other types fall back to a generic property renderer.
+    pub async fn document_object(&self, type_id: &str, id: &str) -> CoreResult<DocumentedObject> {
+        let t = catalog::find(type_id).ok_or_else(|| CoreError::UnknownType(type_id.into()))?;
+        let detail = self.get_object(type_id, id).await?;
+
+        let description = detail
+            .object
+            .get("description")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(String::from);
+
+        let mut sections = Vec::new();
+
+        if documentation::is_settings_catalog(type_id) {
+            let token = self.token().await?;
+            let url = graph::url(&documentation::settings_endpoint(&t, id), None);
+            let settings = graph::get_all(&self.http, &token, &url).await.unwrap_or_default();
+            let section = documentation::settings_catalog_section(&settings);
+            if section.rows.is_empty() {
+                sections.push(documentation::generic_section(&detail.object));
+            } else {
+                sections.push(section);
+            }
+        } else {
+            sections.push(documentation::generic_section(&detail.object));
+        }
+
+        if let Some(assignments) = &detail.assignments {
+            if let Some(section) = documentation::assignments_section(assignments) {
+                sections.push(section);
+            }
+        }
+
+        sections.push(documentation::metadata_section(&detail.object));
+
+        Ok(DocumentedObject {
+            type_id: t.id.clone(),
+            type_title: t.title.clone(),
+            object_id: id.to_string(),
+            name: detail.name,
+            description,
+            sections,
+        })
+    }
+
+    /// Document one or more objects of a single type and write files to disk.
+    pub async fn export_documentation(
+        &self,
+        type_id: &str,
+        ids: Option<Vec<String>>,
+        out_dir: &str,
+        format: DocFormat,
+    ) -> CoreResult<DocExportResult> {
+        let t = catalog::find(type_id).ok_or_else(|| CoreError::UnknownType(type_id.into()))?;
+        let target_ids = match ids {
+            Some(v) if !v.is_empty() => v,
+            _ => self.list_objects(type_id, None).await?.items.into_iter().map(|i| i.id).collect(),
+        };
+        let dir = std::path::Path::new(out_dir).join(&t.title);
+        std::fs::create_dir_all(&dir)?;
+        let mut files = Vec::new();
+        for id in target_ids {
+            let doc = self.document_object(type_id, &id).await?;
+            let filename = format!("{}.{}", sanitize(&doc.name), format.extension());
+            let path = dir.join(&filename);
+            std::fs::write(&path, format.render(&doc))?;
+            files.push(DocExportedFile {
+                id,
+                name: doc.name,
+                path: path.to_string_lossy().to_string(),
+                format,
+            });
+        }
+        Ok(DocExportResult { directory: dir.to_string_lossy().to_string(), files })
     }
 
     // ---- Compare ----------------------------------------------------------

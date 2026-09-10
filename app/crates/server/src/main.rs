@@ -13,7 +13,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use intune_core::{error::ErrorBody, Backend};
+use intune_core::{error::ErrorBody, Backend, DocFormat};
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -36,6 +36,8 @@ async fn main() {
         .route("/api/catalog", get(catalog))
         .route("/api/objects/:type_id", get(list_objects))
         .route("/api/objects/:type_id/:id", get(get_object))
+        .route("/api/document/:type_id/:id", get(document_object))
+        .route("/api/document/export", post(export_documentation))
         .route("/api/export", post(export))
         .route("/api/import", post(import_file))
         .route("/api/compare", post(compare))
@@ -132,6 +134,33 @@ async fn list_objects(State(b): State<Shared>, Path(type_id): Path<String>, Quer
 
 async fn get_object(State(b): State<Shared>, Path((type_id, id)): Path<(String, String)>) -> impl IntoResponse {
     match b.get_object(&type_id, &id).await {
+        Ok(r) => Json(r).into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+async fn document_object(State(b): State<Shared>, Path((type_id, id)): Path<(String, String)>) -> impl IntoResponse {
+    match b.document_object(&type_id, &id).await {
+        Ok(r) => Json(r).into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DocExportBody {
+    type_id: String,
+    ids: Option<Vec<String>>,
+    out_dir: String,
+    #[serde(default = "default_doc_format")]
+    format: DocFormat,
+}
+fn default_doc_format() -> DocFormat {
+    DocFormat::Markdown
+}
+
+async fn export_documentation(State(b): State<Shared>, Json(body): Json<DocExportBody>) -> impl IntoResponse {
+    match b.export_documentation(&body.type_id, body.ids, &body.out_dir, body.format).await {
         Ok(r) => Json(r).into_response(),
         Err(e) => err(e).into_response(),
     }

@@ -5,8 +5,9 @@ use intune_core::{
     auth::{AuthStatus, DeviceCodeStart},
     catalog::ObjectType,
     compare::CompareResult,
+    documentation::DocumentedObject,
     error::CoreError,
-    Backend, ExportResult, ImportResult, ListResult, ObjectDetail,
+    Backend, DocExportResult, DocFormat, ExportResult, ImportResult, ListResult, ObjectDetail,
 };
 use std::sync::Arc;
 use tauri::State;
@@ -74,6 +75,22 @@ async fn compare_to_file(backend: B<'_>, type_id: String, id: String, file_path:
     backend.compare_to_file(&type_id, &id, &file_path).await
 }
 
+#[tauri::command]
+async fn document_object(backend: B<'_>, type_id: String, id: String) -> Result<DocumentedObject, CoreError> {
+    backend.document_object(&type_id, &id).await
+}
+
+#[tauri::command]
+async fn export_documentation(
+    backend: B<'_>,
+    type_id: String,
+    ids: Option<Vec<String>>,
+    out_dir: String,
+    format: DocFormat,
+) -> Result<DocExportResult, CoreError> {
+    backend.export_documentation(&type_id, ids, &out_dir, format).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -92,6 +109,8 @@ pub fn run() {
             export,
             import_file,
             compare_to_file,
+            document_object,
+            export_documentation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
