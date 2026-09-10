@@ -1,0 +1,14 @@
+{
+  "$schema": "https://cursor.com/schemas/environment.json",
+  "install": "bash app/scripts/setup.sh",
+  "terminals": [
+    {
+      "name": "Graph sidecar (API)",
+      "command": "cd app && cargo run -p intune_server"
+    },
+    {
+      "name": "Web UI (Vite)",
+      "command": "cd app && npm run dev:web"
+    }
+  ]
+}

@@ -12,6 +12,9 @@ dist-ssr
 /exports
 exports/
 
+# Tauri generated schemas/capabilities
+/src-tauri/gen
+
 # Editor
 .DS_Store
 *.log
