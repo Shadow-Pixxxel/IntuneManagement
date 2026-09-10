@@ -1,6 +1,8 @@
 import type {
   AuthStatus,
   CompareResult,
+  CopyBatchResult,
+  CopyResult,
   DeviceCodeStart,
   DocExportResult,
   DocFormat,
@@ -152,5 +154,22 @@ export const api = {
     return isTauri()
       ? invokeTauri("export_documentation", { typeId, ids, outDir, format })
       : httpPost("/document/export", { typeId, ids, outDir, format });
+  },
+
+  async copyObject(typeId: string, id: string, newName: string | null, apply: boolean): Promise<CopyResult> {
+    return isTauri()
+      ? invokeTauri("copy_object", { typeId, id, newName, apply })
+      : httpPost("/copy", { typeId, id, newName, apply });
+  },
+
+  async copyByPattern(
+    typeId: string,
+    pattern: string,
+    nameTemplate: string | null,
+    apply: boolean,
+  ): Promise<CopyBatchResult> {
+    return isTauri()
+      ? invokeTauri("copy_by_pattern", { typeId, pattern, nameTemplate, apply })
+      : httpPost("/copy/pattern", { typeId, pattern, nameTemplate, apply });
   },
 };

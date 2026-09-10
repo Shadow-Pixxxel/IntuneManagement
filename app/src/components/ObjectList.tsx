@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowUpDown, Check, Download, FileText, FolderOpen, Inbox, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, ArrowUpDown, Check, Copy, Download, FileText, FolderOpen, Inbox, Loader2, RefreshCw } from "lucide-react";
 import { api, BackendError, isTauri } from "@/api/client";
 import type { DocFormat, ListItem, ObjectType } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { groupIcon } from "@/lib/icons";
+import { CopyDialog } from "@/components/CopyDialog";
 
 interface Props {
   type: ObjectType;
@@ -34,6 +35,7 @@ export function ObjectList({ type, search, onOpen }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "name", dir: 1 });
   const [exporting, setExporting] = useState(false);
   const [documenting, setDocumenting] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,6 +157,15 @@ export function ObjectList({ type, search, onOpen }: Props) {
             {documenting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             {selected.size > 0 ? `Document (${selected.size})` : "Document all"}
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={loading}
+            onClick={() => setCopyOpen(true)}
+            title="Clone objects by name pattern (dry run)"
+          >
+            <Copy className="h-4 w-4" /> Copy by pattern
+          </Button>
           <Button variant="ghost" size="icon" onClick={load} title="Refresh">
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
@@ -232,6 +243,7 @@ export function ObjectList({ type, search, onOpen }: Props) {
           {selected.size > 0 && <span>{selected.size} selected</span>}
         </div>
       )}
+      <CopyDialog type={type} open={copyOpen} onOpenChange={setCopyOpen} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JsonView } from "@/components/JsonView";
 import { CompareView } from "@/components/CompareView";
 import { DocumentView } from "@/components/DocumentView";
+import { CopyDialog } from "@/components/CopyDialog";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatKey } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ export function ObjectDetail({ type, item, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [compare, setCompare] = useState<CompareResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -108,6 +110,9 @@ export function ObjectDetail({ type, item, onClose }: Props) {
             </Button>
             <Button variant="outline" size="sm" disabled={busy || loading} onClick={runCompare}>
               <GitCompare className="h-4 w-4" /> Compare
+            </Button>
+            <Button variant="outline" size="sm" disabled={busy || loading} onClick={() => setCopyOpen(true)}>
+              <Copy className="h-4 w-4" /> Copy
             </Button>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="h-4 w-4" />
@@ -180,6 +185,7 @@ export function ObjectDetail({ type, item, onClose }: Props) {
           ) : null}
         </div>
       </div>
+      <CopyDialog type={type} item={item} open={copyOpen} onOpenChange={setCopyOpen} />
     </div>
   );
 }

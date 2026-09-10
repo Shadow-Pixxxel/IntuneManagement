@@ -133,3 +133,21 @@ export interface DocExportResult {
   directory: string;
   files: DocExportedFile[];
 }
+
+export interface CopyResult {
+  typeId: string;
+  sourceId: string;
+  sourceName: string;
+  newName: string;
+  payload: Record<string, unknown>;
+  created?: unknown;
+  applied: boolean;
+  targetApi: string;
+}
+
+export interface CopyBatchResult {
+  typeId: string;
+  pattern: string;
+  applied: boolean;
+  copies: CopyResult[];
+}
