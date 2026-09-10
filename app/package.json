@@ -13,6 +13,8 @@
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "tauri": "tauri",
     "dev": "tauri dev",
+    "dev:linux": "bash scripts/run-linux.sh dev",
+    "start:linux": "bash scripts/run-linux.sh app",
     "build": "tauri build"
   },
   "dependencies": {

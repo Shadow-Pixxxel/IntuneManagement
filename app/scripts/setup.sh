@@ -22,11 +22,13 @@ if command -v apt-get >/dev/null 2>&1; then
     log "System dependencies already present."
   fi
 elif command -v pacman >/dev/null 2>&1; then
-  # Arch Linux / Omarchy
+  # Arch Linux / Omarchy. Package names verified against the official
+  # Tauri v2 "Linux prerequisites" docs for Arch.
   log "Installing Tauri system dependencies via pacman…"
   sudo pacman -Sy --needed --noconfirm \
     webkit2gtk-4.1 base-devel curl wget file openssl gtk3 \
-    libayatana-appindicator librsvg patchelf
+    libappindicator-gtk3 librsvg patchelf \
+    nodejs npm
 fi
 
 # ---- 2. Rust toolchain -----------------------------------------------------
