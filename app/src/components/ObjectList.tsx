@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowUpDown, Check, Download, FolderOpen, Inbox, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, ArrowUpDown, Check, Download, FileText, FolderOpen, Inbox, Loader2, RefreshCw } from "lucide-react";
 import { api, BackendError, isTauri } from "@/api/client";
-import type { ListItem, ObjectType } from "@/api/types";
+import type { DocFormat, ListItem, ObjectType } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ export function ObjectList({ type, search, onOpen }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "name", dir: 1 });
   const [exporting, setExporting] = useState(false);
+  const [documenting, setDocumenting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,6 +101,27 @@ export function ObjectList({ type, search, onOpen }: Props) {
     [type.id, push]
   );
 
+  const runDocument = useCallback(
+    async (ids: string[] | null, format: DocFormat) => {
+      const dir = await pickDirectory();
+      if (dir === null) return;
+      setDocumenting(true);
+      try {
+        const res = await api.exportDocumentation(type.id, ids, dir, format);
+        push({
+          kind: "success",
+          title: `Documented ${res.files.length} object${res.files.length === 1 ? "" : "s"} (${format})`,
+          description: res.directory,
+        });
+      } catch (e) {
+        push({ kind: "error", title: "Documentation failed", description: (e as Error).message });
+      } finally {
+        setDocumenting(false);
+      }
+    },
+    [type.id, push]
+  );
+
   const Icon = groupIcon(type.group);
 
   return (
@@ -122,6 +144,16 @@ export function ObjectList({ type, search, onOpen }: Props) {
           <Button variant="secondary" size="sm" disabled={exporting || loading || filtered.length === 0} onClick={() => runExport(null)}>
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
             Export all
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={documenting || loading || filtered.length === 0}
+            onClick={() => runDocument(selected.size > 0 ? [...selected] : null, "markdown")}
+            title="Export Markdown documentation for selected objects, or all if none selected"
+          >
+            {documenting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            {selected.size > 0 ? `Document (${selected.size})` : "Document all"}
           </Button>
           <Button variant="ghost" size="icon" onClick={load} title="Refresh">
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />

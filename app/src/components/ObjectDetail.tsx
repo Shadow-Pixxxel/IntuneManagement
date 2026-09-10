@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Copy, Download, GitCompare, Loader2, Users, X } from "lucide-react";
+import { AlertCircle, Copy, Download, FileText, GitCompare, Loader2, Users, X } from "lucide-react";
 import { api, BackendError, isTauri } from "@/api/client";
 import type { CompareResult, ListItem, ObjectDetail as Detail, ObjectType } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JsonView } from "@/components/JsonView";
 import { CompareView } from "@/components/CompareView";
+import { DocumentView } from "@/components/DocumentView";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatKey } from "@/lib/utils";
 
@@ -130,6 +131,9 @@ export function ObjectDetail({ type, item, onClose }: Props) {
             <Tabs defaultValue="overview" className="flex h-full flex-col">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="documentation" className="gap-1.5">
+                  <FileText className="h-3.5 w-3.5" /> Documentation
+                </TabsTrigger>
                 <TabsTrigger value="json">JSON</TabsTrigger>
                 {type.assignments && (
                   <TabsTrigger value="assignments" className="gap-1.5">
@@ -142,6 +146,9 @@ export function ObjectDetail({ type, item, onClose }: Props) {
 
               <TabsContent value="overview" className="min-h-0 flex-1 overflow-auto">
                 <Overview object={detail.object} />
+              </TabsContent>
+              <TabsContent value="documentation" className="min-h-0 flex-1 overflow-auto">
+                <DocumentView type={type} id={item.id} />
               </TabsContent>
               <TabsContent value="json" className="min-h-0 flex-1 overflow-hidden">
                 <div className="relative h-full">

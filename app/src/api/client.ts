@@ -2,6 +2,9 @@ import type {
   AuthStatus,
   CompareResult,
   DeviceCodeStart,
+  DocExportResult,
+  DocFormat,
+  DocumentedObject,
   ExportResult,
   ImportResult,
   ListResult,
@@ -132,5 +135,22 @@ export const api = {
     return isTauri()
       ? invokeTauri("compare_to_file", { typeId, id, filePath })
       : httpPost("/compare", { typeId, id, filePath });
+  },
+
+  async documentObject(typeId: string, id: string): Promise<DocumentedObject> {
+    return isTauri()
+      ? invokeTauri("document_object", { typeId, id })
+      : httpGet(`/document/${encodeURIComponent(typeId)}/${encodeURIComponent(id)}`);
+  },
+
+  async exportDocumentation(
+    typeId: string,
+    ids: string[] | null,
+    outDir: string,
+    format: DocFormat,
+  ): Promise<DocExportResult> {
+    return isTauri()
+      ? invokeTauri("export_documentation", { typeId, ids, outDir, format })
+      : httpPost("/document/export", { typeId, ids, outDir, format });
   },
 };

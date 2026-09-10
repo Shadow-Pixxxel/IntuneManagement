@@ -96,3 +96,40 @@ export interface ApiError {
   code: string;
   message: string;
 }
+
+export type DocFormat = "markdown" | "html" | "json";
+
+export type DocRowKind = "setting" | "group";
+
+export interface DocRow {
+  name: string;
+  value: string;
+  level: number;
+  kind: DocRowKind;
+}
+
+export interface DocSection {
+  title: string;
+  rows: DocRow[];
+}
+
+export interface DocumentedObject {
+  typeId: string;
+  typeTitle: string;
+  objectId: string;
+  name: string;
+  description?: string | null;
+  sections: DocSection[];
+}
+
+export interface DocExportedFile {
+  id: string;
+  name: string;
+  path: string;
+  format: DocFormat;
+}
+
+export interface DocExportResult {
+  directory: string;
+  files: DocExportedFile[];
+}
