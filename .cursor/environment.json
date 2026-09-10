@@ -1,0 +1,4 @@
+{
+  "name": "IntuneManagement (PowerShell dev)",
+  "install": "bash .cursor/install.sh"
+}
