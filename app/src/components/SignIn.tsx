@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, ExternalLink, KeyRound, Loader2, ShieldCheck, Smartphone } from "lucide-react";
+import { ChevronDown, Copy, ExternalLink, KeyRound, Loader2, RotateCcw, Settings2, ShieldCheck, Smartphone } from "lucide-react";
 import { api, BackendError, isTauri } from "@/api/client";
 import type { AuthStatus, DeviceCodeStart } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { Logo } from "@/components/Logo";
+import { EMPTY_SETTINGS, useAuthSettings } from "@/lib/settings";
+
+/** Built-in Microsoft first-party public client used when no override is set. */
+const DEFAULT_CLIENT_LABEL = "Microsoft Graph Command Line Tools";
+const DEFAULT_CLIENT_ID = "14d82eec-204b-4c2f-b7e8-296a70dab67e";
 
 interface Props {
   onSignedIn: (status: AuthStatus) => void;
@@ -23,12 +28,17 @@ async function openExternal(url: string) {
 
 export function SignIn({ onSignedIn }: Props) {
   const { push } = useToast();
+  const { settings, update } = useAuthSettings();
   const [busy, setBusy] = useState(false);
   const [device, setDevice] = useState<DeviceCodeStart | null>(null);
   const [tenantId, setTenantId] = useState("");
   const [appId, setAppId] = useState("");
   const [appSecret, setAppSecret] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(
+    () => Boolean(settings.clientId || settings.tenantId),
+  );
   const pollRef = useRef<number | null>(null);
+  const hasOverrides = Boolean(settings.clientId || settings.tenantId);
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -41,7 +51,10 @@ export function SignIn({ onSignedIn }: Props) {
   const startDevice = useCallback(async () => {
     setBusy(true);
     try {
-      const dc = await api.deviceStart({ tenantId: tenantId || undefined, appId: appId || undefined });
+      const dc = await api.deviceStart({
+        tenantId: settings.tenantId || undefined,
+        appId: settings.clientId || undefined,
+      });
       setDevice(dc);
       await openExternal(dc.verificationUri);
       pollRef.current = window.setInterval(async () => {
@@ -62,7 +75,7 @@ export function SignIn({ onSignedIn }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [tenantId, appId, onSignedIn, push]);
+  }, [settings.tenantId, settings.clientId, onSignedIn, push]);
 
   const appOnly = useCallback(async () => {
     setBusy(true);
@@ -148,11 +161,68 @@ export function SignIn({ onSignedIn }: Props) {
               ) : (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Sign in interactively with your Microsoft account. Best for Linux, Wayland and Omarchy — no embedded
-                    browser required.
+                    Sign in interactively as <span className="font-medium text-foreground">yourself</span> — you approve
+                    the request in your browser, so it works on Linux, Wayland and Omarchy with no embedded browser.
                   </p>
-                  <Input placeholder="Tenant ID (optional — defaults to 'common')" value={tenantId} onChange={(e) => setTenantId(e.target.value)} />
-                  <Input placeholder="Application (client) ID (optional)" value={appId} onChange={(e) => setAppId(e.target.value)} />
+                  <p className="text-sm text-muted-foreground">
+                    By default this uses Microsoft&apos;s built-in{" "}
+                    <span className="font-medium text-foreground">{DEFAULT_CLIENT_LABEL}</span> public client, which is
+                    available in every tenant — no app registration required. Bring your own app below if your tenant
+                    restricts it.
+                  </p>
+
+                  <div className="rounded-lg border border-border">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowAdvanced((v) => !v)}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings2 className="h-4 w-4" />
+                        Advanced: custom app registration
+                        {hasOverrides ? (
+                          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                            custom
+                          </span>
+                        ) : null}
+                      </span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+                    </button>
+                    {showAdvanced ? (
+                      <div className="space-y-3 border-t border-border px-3 py-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Application (client) ID</label>
+                          <Input
+                            placeholder={`Default: ${DEFAULT_CLIENT_ID}`}
+                            value={settings.clientId}
+                            onChange={(e) => update({ clientId: e.target.value.trim() })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Tenant ID or domain</label>
+                          <Input
+                            placeholder="Default: common"
+                            value={settings.tenantId}
+                            onChange={(e) => update({ tenantId: e.target.value.trim() })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-muted-foreground">Saved on this device.</p>
+                          {hasOverrides ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 gap-1 text-xs"
+                              onClick={() => update(EMPTY_SETTINGS)}
+                            >
+                              <RotateCcw className="h-3 w-3" /> Reset to default
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <Button className="w-full" disabled={busy} onClick={startDevice}>
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
                     Sign in with device code
@@ -164,7 +234,12 @@ export function SignIn({ onSignedIn }: Props) {
             <TabsContent value="app">
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  App-only sign in with client credentials. Leave fields blank to use the{" "}
+                  App-only (unattended) sign in with your own Entra ID app registration and client secret — best for
+                  automation, CI, or the headless smoke test. Requires an app with Microsoft Graph{" "}
+                  <span className="font-medium text-foreground">application</span> permissions and admin consent.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Leave fields blank to use the{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">tenant_id</code>,{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">app_id</code> and{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">app_secret</code> environment variables.

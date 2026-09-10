@@ -3,9 +3,16 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 const DEFAULT_TENANT: &str = "common";
-/// Public client id shipped by the original IntuneManagement tool (Azure PowerShell style).
-/// Used for the interactive device-code flow when the user does not provide their own app.
-pub const DEFAULT_PUBLIC_APP_ID: &str = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547";
+/// Default public client used for the interactive device-code flow.
+///
+/// This is Microsoft's first-party **Microsoft Graph Command Line Tools**
+/// (a.k.a. Microsoft Graph PowerShell) application. It is a public client that
+/// is pre-registered by Microsoft and available in essentially every Entra ID
+/// tenant, and it supports the OAuth device-code grant with delegated Microsoft
+/// Graph scopes — so interactive sign-in works out of the box without the admin
+/// first registering an app. Users can still override this (and the tenant)
+/// with their own app registration from the sign-in screen / Settings.
+pub const DEFAULT_PUBLIC_APP_ID: &str = "14d82eec-204b-4c2f-b7e8-296a70dab67e";
 
 const SCOPE_APP: &str = "https://graph.microsoft.com/.default";
 const SCOPE_DELEGATED: &str = "https://graph.microsoft.com/.default offline_access";
