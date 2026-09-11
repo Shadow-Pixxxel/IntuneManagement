@@ -36,10 +36,11 @@ case "$mode" in
   app)
     target="${2:-}"
     if [ -z "$target" ]; then
-      # Prefer a built .AppImage, then a plain binary.
-      target="$(find src-tauri/target -type f -name '*.AppImage' 2>/dev/null | head -n1 || true)"
+      # Prefer a built .AppImage, then the plain release binary.
+      # Bundles land under the workspace target dir (app/target), not src-tauri/target.
+      target="$(find target -type f -name '*.AppImage' 2>/dev/null | head -n1 || true)"
       if [ -z "$target" ]; then
-        target="$(find src-tauri/target/release -maxdepth 1 -type f -name 'intune-manager*' 2>/dev/null | head -n1 || true)"
+        target="$(find target/release -maxdepth 1 -type f -name 'intune-manager' 2>/dev/null | head -n1 || true)"
       fi
     fi
     if [ -z "$target" ] || [ ! -e "$target" ]; then

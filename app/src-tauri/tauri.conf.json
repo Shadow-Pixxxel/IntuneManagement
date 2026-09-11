@@ -27,10 +27,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage"],
+    "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Cross-platform Microsoft Intune manager",
     "longDescription": "A beautiful, cross-platform desktop GUI for managing Microsoft Intune and Azure AD objects via the Microsoft Graph beta API. Runs on Linux (incl. Omarchy/Wayland), macOS and Windows.",
+    "linux": {
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "gtk3"]
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
