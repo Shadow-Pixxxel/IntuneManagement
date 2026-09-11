@@ -8,6 +8,13 @@ macOS and Windows**.
 All Microsoft Intune / Azure AD functionality goes through the Microsoft Graph
 `beta` API, so it is inherently cross-platform once decoupled from WPF.
 
+> ### 📦 Installation & Launch
+> **[docs/INSTALL.md](docs/INSTALL.md)** has detailed, end-to-end instructions
+> for **every OS** — both running the prebuilt bundle (`.deb` / `.rpm` /
+> `.AppImage` / `.dmg` / `.msi`) and building from source — for Debian/Ubuntu,
+> the universal AppImage, Arch/Omarchy (Hyprland/Wayland), Fedora/RHEL, macOS and
+> Windows, plus first-launch sign-in.
+
 ![Architecture](docs/architecture.svg)
 
 ---
@@ -19,7 +26,7 @@ Tailwind CSS + shadcn/ui.**
 
 | Concern | Decision | Why |
 | --- | --- | --- |
-| Desktop shell | **Tauri v2** | Tiny native binaries, first-class Linux/Wayland (WebKitGTK) support that runs on Omarchy, secure by default. Ships `deb` + `AppImage`. |
+| Desktop shell | **Tauri v2** | Tiny native binaries, first-class Linux/Wayland (WebKitGTK) support that runs on Omarchy, secure by default. Ships `deb` + `rpm` + `AppImage` on Linux, `dmg` on macOS, and `msi`/`nsis` on Windows. |
 | Graph client | **Rust core (`reqwest`/`tokio`)** | Tokens and secrets stay in the native process, never the renderer. Handles pagination (`@odata.nextLink`), 429/5xx retry, and `beta` endpoints. |
 | Frontend | **React + TS + Tailwind + shadcn/ui (Radix)** | Elegant, minimal, keyboard-friendly UI with light/dark themes. |
 | Auth | **Device-code** (primary, best for Linux/Wayland — no embedded browser) and **app-only client-credentials** (headless/DevOps + automated tests) | Matches how the original tool authenticates; device-code is the real-user path on Linux. Device-code defaults to Microsoft's first-party **Graph Command Line Tools** public client (`14d82eec-…`) so sign-in works in any tenant with no app registration; overridable in the UI. |
@@ -45,8 +52,8 @@ src             React + Tailwind + shadcn/ui frontend
 ```
 
 > **Why not Electron?** Tauri builds, runs and packages cleanly on this Linux
-> stack (verified: `cargo build`/`tauri build` produce a `deb` + `AppImage`),
-> so the smaller, more secure option was kept. Electron remains a drop-in
+> stack (verified: `cargo build`/`tauri build` produce a `deb` + `rpm` +
+> `AppImage`), so the smaller, more secure option was kept. Electron remains a drop-in
 > fallback since the frontend and the HTTP sidecar are host-agnostic.
 
 ---
@@ -79,6 +86,11 @@ src             React + Tailwind + shadcn/ui frontend
 
 ## Build & run
 
+> For full per-OS install & launch steps (prebuilt bundles **and** from source,
+> covering Debian/Ubuntu, AppImage, Arch/Omarchy, Fedora/RHEL, macOS and
+> Windows), see **[docs/INSTALL.md](docs/INSTALL.md)**. The quickstart below is
+> the short version.
+
 ### Prerequisites (install once)
 
 ```bash
@@ -94,13 +106,21 @@ bash app/scripts/setup.sh   # idempotent: system deps + Rust + npm install
   libappindicator-gtk3 librsvg patchelf nodejs npm` (installed by
   `scripts/setup.sh`; package names follow the official Tauri v2 Linux
   prerequisites for Arch). Rust is installed via `rustup`.
+- **Fedora / RHEL** (manual — `setup.sh` doesn't auto-install dnf): `webkit2gtk4.1-devel
+  openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel
+  libxdo-devel` + `sudo dnf group install "C Development Tools and Libraries"`.
+- **macOS**: Xcode Command Line Tools (`xcode-select --install`).
+- **Windows**: Rust MSVC toolchain, VS C++ Build Tools, WebView2 Runtime.
 
 ### Native desktop app (Linux / Omarchy / macOS / Windows)
 
 ```bash
 cd app
 npm run dev      # tauri dev — hot-reloading desktop window
-npm run build    # tauri build — produces target/release/bundle (deb + AppImage)
+npm run build    # tauri build — native installers for the current OS
+                 #   Linux:   target/release/bundle/{deb,rpm,appimage}/…
+                 #   macOS:   target/release/bundle/{macos,dmg}/…
+                 #   Windows: target/release/bundle/{msi,nsis}/…
 ```
 
 ### Running on Omarchy / Hyprland (Wayland)
