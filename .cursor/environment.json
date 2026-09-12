@@ -1,4 +1,15 @@
 {
-  "name": "IntuneManagement (PowerShell dev)",
-  "install": "bash .cursor/install.sh"
+  "$schema": "https://cursor.com/schemas/environment.json",
+  "name": "IntuneManagement",
+  "install": "bash .cursor/install.sh && bash app/scripts/setup.sh",
+  "terminals": [
+    {
+      "name": "Graph sidecar (API)",
+      "command": "cd app && cargo run -p intune_server"
+    },
+    {
+      "name": "Web UI (Vite)",
+      "command": "cd app && npm run dev:web"
+    }
+  ]
 }
