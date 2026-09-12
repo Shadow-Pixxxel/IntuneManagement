@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="360" viewBox="0 0 860 360" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <style>
+      .box{rx:12;stroke:#c7c9d9;stroke-width:1.5;fill:#ffffff}
+      .lbl{font-size:14px;fill:#0f1222;font-weight:600}
+      .sub{font-size:11px;fill:#5b607a}
+      .core{fill:url(#g)}
+      .coretxt{fill:#ffffff}
+      .edge{stroke:#9aa0bd;stroke-width:1.6;fill:none}
+      .tag{font-size:11px;fill:#5b607a}
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="860" height="360" fill="#f6f7fb"/>
+
+  <!-- Hosts -->
+  <rect class="box" x="30" y="40" width="220" height="90" rx="12"/>
+  <text class="lbl" x="50" y="72">Tauri v2 desktop</text>
+  <text class="sub" x="50" y="92">React + Tailwind + shadcn</text>
+  <text class="sub" x="50" y="110">native invoke()</text>
+
+  <rect class="box" x="30" y="230" width="220" height="90" rx="12"/>
+  <text class="lbl" x="50" y="262">Browser / headless</text>
+  <text class="sub" x="50" y="282">same React app</text>
+  <text class="sub" x="50" y="300">fetch('/api/...')</text>
+
+  <!-- transports -->
+  <rect class="box" x="320" y="40" width="200" height="90" rx="12"/>
+  <text class="lbl" x="340" y="72">#[tauri::command]</text>
+  <text class="sub" x="340" y="92">src-tauri</text>
+
+  <rect class="box" x="320" y="230" width="200" height="90" rx="12"/>
+  <text class="lbl" x="340" y="262">axum sidecar</text>
+  <text class="sub" x="340" y="282">crates/server · 127.0.0.1</text>
+
+  <!-- core -->
+  <rect class="box core" x="600" y="120" width="230" height="120" rx="14"/>
+  <text class="lbl coretxt" x="622" y="158">intune_core (Rust)</text>
+  <text class="sub coretxt" x="622" y="180" opacity="0.9">auth · Graph client</text>
+  <text class="sub coretxt" x="622" y="198" opacity="0.9">catalog · export/import</text>
+  <text class="sub coretxt" x="622" y="216" opacity="0.9">compare · tokens stay here</text>
+
+  <!-- edges -->
+  <path class="edge" d="M250 85 H320"/>
+  <path class="edge" d="M250 275 H320"/>
+  <path class="edge" d="M520 85 C 560 85, 560 150, 600 150"/>
+  <path class="edge" d="M520 275 C 560 275, 560 210, 600 210"/>
+
+  <text class="tag" x="640" y="270">Microsoft Graph beta ’</text>
+  <path class="edge" d="M715 250 V 300" marker-end="url(#a)"/>
+  <text class="tag" x="640" y="316">graph.microsoft.com/beta</text>
+</svg>
